@@ -1,0 +1,15 @@
+metadata:
+  name: onapsisExecuteScan
+  description: Execute a scan with Onapsis Control
+  longDescription: This step executes a scan with Onapsis Control.
+spec:
+  inputs:
+    params:
+      - name: scanServiceUrl
+        type: string
+        description: URL of the scan service
+        mandatory: true
+        scope:
+          - PARAMETERS
+          - STAGES
+          - STEPS
