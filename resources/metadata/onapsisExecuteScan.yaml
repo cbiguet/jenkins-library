@@ -4,6 +4,11 @@ metadata:
   longDescription: This step executes a scan with Onapsis Control.
 spec:
   inputs:
+    secrets:
+      - name: onapsisTokenCredentialsId
+        type: jenkins
+        description: "Jenkins 'Secret text' credentials ID containing the token used to authenticate with Onapsis Control Scan Service"
+        mandatory: true
     params:
       - name: scanServiceUrl
         type: string

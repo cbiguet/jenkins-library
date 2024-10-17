@@ -152,6 +152,9 @@ func onapsisExecuteScanMetadata() config.StepData {
 		},
 		Spec: config.StepSpec{
 			Inputs: config.StepInputs{
+				Secrets: []config.StepSecrets{
+					{Name: "onapsisTokenCredentialsId", Description: "Jenkins 'Secret text' credentials ID containing the token used to authenticate with Onapsis Control Scan Service", Type: "jenkins"},
+				},
 				Parameters: []config.StepParameters{
 					{
 						Name:        "scanServiceUrl",
