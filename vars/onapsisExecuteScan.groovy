@@ -1,6 +1,6 @@
 import com.cloudbees.groovy.cps.NonCPS
 import com.sap.piper.Utils
-
+import groovy.transform.Field
 
 @Field String STEP_NAME = getClass().getName()
 @Field String METADATA_FILE = 'metadata/onapsisExecuteScan.yaml'
