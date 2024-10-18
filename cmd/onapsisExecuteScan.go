@@ -61,7 +61,7 @@ func onapsisExecuteScan(config onapsisExecuteScanOptions, telemetryData *telemet
 func runOnapsisExecuteScan(config *onapsisExecuteScanOptions, telemetryData *telemetry.CustomData, utils onapsisExecuteScanUtils) error {
 	log.Entry().WithField("LogField", "Log field content").Info("This is just a demo for a simple step.")
 	// Add logline with the following content: "Scan request to scan service: <scanServiceURL>"
-	log.Entry().Info("Scan request to scan service: %v", config.ScanServiceURL)
+	log.Entry().Infof("Scan request to scan service: %v", config.ScanServiceURL)
 
 	// Example of calling methods from external dependencies directly on utils:
 	exists, err := utils.FileExists("file.txt")
