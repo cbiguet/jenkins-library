@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/SAP/jenkins-library/pkg/command"
 	piperHttp "github.com/SAP/jenkins-library/pkg/http"
@@ -136,13 +137,18 @@ func runOnapsisExecuteScan(config *onapsisExecuteScanOptions, telemetryData *tel
 	log.Entry().WithField("LogField", "Log field content").Info("This is just a demo for a simple step.")
 
 	// Create a new ScanServer
+	log.Entry().Info("Creating scan server...")
 	server, err := NewScanServer(&piperHttp.Client{}, config.ScanServiceURL, config.AccessToken)
 	if err != nil {
 		return errors.Wrap(err, "failed to create scan server")
 	}
 
 	// Call the ScanProject method
+	log.Entry().Info("Scanning project...")
 	response, err := server.ScanProject(config, telemetryData, utils, "ui5")
+	if err != nil {
+		return errors.Wrap(err, "failed to scan project")
+	}
 	// Log the JobID
 	log.Entry().Infof("JobID: %s", response.Result.JobID)
 
@@ -173,7 +179,9 @@ func NewScanServer(client piperHttp.Uploader, serverUrl string, token string) (*
 
 	// Set authorization token for client
 	options := piperHttp.ClientOptions{
-		Token: "Bearer " + token,
+		Token:                     "Bearer " + token,
+		MaxRequestDuration:        60 * time.Second, // DEBUG
+		TransportSkipVerification: true,             //DEBUG
 	}
 	server.client.SetOptions(options)
 
