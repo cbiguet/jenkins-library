@@ -204,6 +204,7 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	// defer fileHandle.Close()
 
 	// Get workspace path
+	log.Entry().Info("Getting workspace path...") // DEBUG
 	workspace, err := utils.Getwd()
 	if err != nil {
 		return Response{}, errors.Wrap(err, "failed to get workspace path")
@@ -211,12 +212,14 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	zipFileName := filepath.Join(workspace, "workspace.zip")
 
 	// Zip workspace files
+	log.Entry().Info("Zipping workspace files...") // DEBUG
 	err = zipProject(workspace, zipFileName)
 	if err != nil {
 		return Response{}, errors.Wrap(err, "failed to zip workspace files")
 	}
 
 	// Get zip file content
+	log.Entry().Info("Getting zip file content...") // DEBUG
 	fileHandle, err := utils.Open(zipFileName)
 	if err != nil {
 		return Response{}, errors.Wrapf(err, "unable to locate file %v", zipFileName)
@@ -224,6 +227,7 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	defer fileHandle.Close()
 
 	// Construct ScanConfig form field
+	log.Entry().Info("Constructing ScanConfig form field...") // DEBUG
 	scanConfig := fmt.Sprintf(`{
 		"engine_type": "FILE",
 		"scan_information": {
@@ -244,6 +248,7 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	}
 
 	// Create request data
+	log.Entry().Info("Creating request data...") // DEBUG
 	requestData := piperHttp.UploadRequestData{
 		Method:        "POST",
 		URL:           srv.serverUrl + "/cca/v1.0/scan/file",
@@ -255,12 +260,14 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	}
 
 	// Send request
+	log.Entry().Info("Sending request...") // DEBUG
 	response, err := srv.client.Upload(requestData)
 	if err != nil {
 		return Response{}, errors.Wrap(err, "failed to upload file")
 	}
 
 	// Parse response
+	log.Entry().Info("Parsing response...") // DEBUG
 	responseData := Response{}
 	err = piperHttp.ParseHTTPResponseBodyJSON(response, responseData)
 	if err != nil {
@@ -268,6 +275,7 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	}
 
 	// Check the success field
+	log.Entry().Info("Checking success field...") // DEBUG
 	if responseData.Success {
 		return responseData, nil
 	} else {
