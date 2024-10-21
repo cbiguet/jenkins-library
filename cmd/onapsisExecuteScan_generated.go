@@ -18,6 +18,7 @@ import (
 
 type onapsisExecuteScanOptions struct {
 	ScanServiceURL string `json:"scanServiceUrl,omitempty"`
+	AccessToken    string `json:"accessToken,omitempty"`
 }
 
 // OnapsisExecuteScanCommand Execute a scan with Onapsis Control
@@ -51,6 +52,7 @@ func OnapsisExecuteScanCommand() *cobra.Command {
 				log.SetErrorCategory(log.ErrorConfiguration)
 				return err
 			}
+			log.RegisterSecret(stepConfig.AccessToken)
 
 			if len(GeneralConfig.HookConfig.SentryConfig.Dsn) > 0 {
 				sentryHook := log.NewSentryHook(GeneralConfig.HookConfig.SentryConfig.Dsn, GeneralConfig.CorrelationID)
@@ -138,6 +140,7 @@ func OnapsisExecuteScanCommand() *cobra.Command {
 
 func addOnapsisExecuteScanFlags(cmd *cobra.Command, stepConfig *onapsisExecuteScanOptions) {
 	cmd.Flags().StringVar(&stepConfig.ScanServiceURL, "scanServiceUrl", os.Getenv("PIPER_scanServiceUrl"), "URL of the scan service")
+	cmd.Flags().StringVar(&stepConfig.AccessToken, "accessToken", os.Getenv("PIPER_accessToken"), "Token used to authenticate with the Control Scan Service")
 
 	cmd.MarkFlagRequired("scanServiceUrl")
 }
@@ -164,6 +167,20 @@ func onapsisExecuteScanMetadata() config.StepData {
 						Mandatory:   true,
 						Aliases:     []config.Alias{},
 						Default:     os.Getenv("PIPER_scanServiceUrl"),
+					},
+					{
+						Name: "accessToken",
+						ResourceRef: []config.ResourceReference{
+							{
+								Name: "onapsisTokenCredentialsId",
+								Type: "secret",
+							},
+						},
+						Scope:     []string{"PARAMETERS", "STAGES", "STEPS"},
+						Type:      "string",
+						Mandatory: false,
+						Aliases:   []config.Alias{},
+						Default:   os.Getenv("PIPER_accessToken"),
 					},
 				},
 			},

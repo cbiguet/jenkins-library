@@ -18,3 +18,14 @@ spec:
           - PARAMETERS
           - STAGES
           - STEPS
+      - name: accessToken
+        type: string
+        description: "Token used to authenticate with the Control Scan Service"
+        scope:
+          - PARAMETERS
+          - STAGES
+          - STEPS
+        secret: true
+        resourceRef:
+          - name: onapsisTokenCredentialsId
+            type: secret
