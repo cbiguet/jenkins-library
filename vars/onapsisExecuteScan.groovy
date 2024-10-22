@@ -6,6 +6,6 @@ import static com.sap.piper.Prerequisites.checkScript
 
 def call(Map parameters = [:], body) {
     final script = checkScript(this, parameters) ?: this
-    List credentials = [[type: 'token', id: 'onapsisCredentialsId', env: ['PIPER_token']]]
+    List credentials = [[type: 'token', id: 'onapsisTokenCredentialsId', env: ['PIPER_token']]]
     piperExecuteBin(parameters, STEP_NAME, METADATA_FILE, credentials)
 }
