@@ -396,6 +396,8 @@ func NewScanServer(client piperHttp.Uploader, serverUrl string, token string) (*
 		Token:                     "Bearer " + token,
 		MaxRequestDuration:        60 * time.Second, // DEBUG
 		TransportSkipVerification: true,             //DEBUG
+		DoLogRequestBodyOnDebug:   true,
+		DoLogResponseBodyOnDebug:  true,
 	}
 	server.client.SetOptions(options)
 
