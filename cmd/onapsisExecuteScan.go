@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -486,7 +487,7 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	// Parse response
 	log.Entry().Info("Parsing response...") // DEBUG
 	responseData := Response{}
-	err = piperHttp.ParseHTTPResponseBodyJSON(response, responseData)
+	err = piperHttp.ParseHTTPResponseBodyJSON(response, &responseData)
 	if err != nil {
 		return Response{}, errors.Wrap(err, "failed to parse file")
 	}
@@ -496,7 +497,11 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	if responseData.Success {
 		return responseData, nil
 	} else {
-		return responseData, errors.Errorf("Request failed with result_code: %d, messages: %v", responseData.Result.ResultCode, responseData.Result.Messages)
+		messageJSON, err := json.MarshalIndent(responseData.Result.Messages, "", "  ")
+		if err != nil {
+			return Response{}, errors.Wrap(err, "failed to marshal Messages")
+		}
+		return responseData, errors.Errorf("Request failed with result_code: %d, messages: %v", responseData.Result.ResultCode, string(messageJSON))
 	}
 
 }
@@ -523,19 +528,19 @@ type Response struct {
 }
 
 type OnapsisJobResult struct {
-	JobID      string    `json:"job_id,omitempty"`      // present only on success
-	ResultCode int       `json:"result_code,omitempty"` // present only on failure
-	Timestamp  string    `json:"timestamp,omitempty"`   // present only on success
+	JobID      string    `json:"job_id"`      // present only on success
+	ResultCode int       `json:"result_code"` // present only on failure
+	Timestamp  string    `json:"timestamp"`   // present only on success
 	Messages   []Message `json:"messages"`
 }
 
 type Message struct {
-	Sequence  int     `json:"sequence"`
-	Timestamp string  `json:"timestamp"`
-	Level     string  `json:"level"`
-	MessageID string  `json:"message_id"`
-	Param1    *string `json:"param1"`
-	Param2    *string `json:"param2"`
-	Param3    *string `json:"param3"`
-	Param4    *string `json:"param4"`
+	Sequence  int    `json:"sequence"`
+	Timestamp string `json:"timestamp"`
+	Level     string `json:"level"`
+	MessageID string `json:"message_id"`
+	Param1    string `json:"param1"`
+	Param2    string `json:"param2"`
+	Param3    string `json:"param3"`
+	Param4    string `json:"param4"`
 }
