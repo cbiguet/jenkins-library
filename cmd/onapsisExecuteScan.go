@@ -425,20 +425,21 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	if err != nil {
 		return Response{}, errors.Wrap(err, "failed to get workspace path")
 	}
-	zipFileName := filepath.Join(workspace, "workspace.zip")
 
 	// Zip workspace files
 	log.Entry().Info("Zipping workspace files...") // DEBUG
-	err = zipProject(workspace, zipFileName)
+	zipFileName := "workspace.zip"
+	zipFilePath := filepath.Join(workspace, zipFileName)
+	err = zipProject(workspace, zipFilePath)
 	if err != nil {
 		return Response{}, errors.Wrap(err, "failed to zip workspace files")
 	}
 
 	// Get zip file content
 	log.Entry().Info("Getting zip file content...") // DEBUG
-	fileHandle, err := utils.Open(zipFileName)
+	fileHandle, err := utils.Open(zipFilePath)
 	if err != nil {
-		return Response{}, errors.Wrapf(err, "unable to locate file %v", zipFileName)
+		return Response{}, errors.Wrapf(err, "unable to locate file %v", zipFilePath)
 	}
 	defer fileHandle.Close()
 
@@ -501,10 +502,10 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 }
 
 // func zipWorkspace(utils onapsisExecuteScanUtils) (*os.File, error) {
-// 	zipFileName := filepath.Join(utils.GetWorkspace(), "workspace.zip")
+// 	zipFilePath := filepath.Join(utils.GetWorkspace(), "workspace.zip")
 // 	patterns := piperutils.Trim(strings.Split(filterPattern, ","))
 // 	sort.Strings(patterns)
-// 	zipFile, err := os.Create(zipFileName)
+// 	zipFile, err := os.Create(zipFilePath)
 // 	if err != nil {
 // 		return zipFile, errors.Wrap(err, "failed to create archive of project sources")
 // 	}
