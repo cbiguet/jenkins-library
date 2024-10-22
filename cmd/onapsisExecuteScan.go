@@ -13,6 +13,7 @@ import (
 	"github.com/SAP/jenkins-library/pkg/log"
 	"github.com/SAP/jenkins-library/pkg/piperutils"
 	"github.com/SAP/jenkins-library/pkg/telemetry"
+	"github.com/bmatcuk/doublestar"
 	"github.com/pkg/errors"
 )
 
@@ -105,6 +106,19 @@ type onapsisExecuteScanUtilsBundle struct {
 // 	return nil
 // }
 
+var includePatterns = []string{
+	"**/*.js",
+	"**/*.json",
+}
+
+var excludePatterns = []string{
+	"**/.git/**",      // Exclude .git directory
+	"**/.pipeline/**", // Exclude .pipeline directory
+	"**/.gitignore",   // Exclude .gitignore file
+	"**/*.log",        // Exclude all log files
+	"workspace.zip",   // Exclude the zip file itself
+}
+
 func zipProject(folderPath string, outputPath string) error {
 	log.Entry().Infof("Starting to zip folder: %s", folderPath)
 
@@ -129,6 +143,32 @@ func zipProject(folderPath string, outputPath string) error {
 		if err != nil {
 			log.Entry().Errorf("Error accessing path %s: %v", path, err)
 			return err
+		}
+
+		// Check if the file matches any of the exclude patterns
+		for _, pattern := range excludePatterns {
+			matched, _ := doublestar.Match(pattern, path)
+			if matched {
+				log.Entry().Infof("Excluding: %s (matches pattern: %s)", path, pattern)
+				if info.IsDir() {
+					return filepath.SkipDir // Skip the entire directory
+				}
+				return nil // Skip the file
+			}
+		}
+
+		// Check if the file matches any of the include patterns
+		included := false
+		for _, pattern := range includePatterns {
+			matched, _ := doublestar.Match(pattern, path)
+			if matched {
+				included = true
+				break
+			}
+		}
+		if !included {
+			log.Entry().Infof("Skipping: %s (does not match include patterns)", path)
+			return nil
 		}
 
 		// Log each file being processed
@@ -189,6 +229,91 @@ func zipProject(folderPath string, outputPath string) error {
 
 	return nil
 }
+
+// func zipProject(folderPath string, outputPath string) error {
+// 	log.Entry().Infof("Starting to zip folder: %s", folderPath)
+
+// 	// Create the output file
+// 	zipFile, err := os.Create(outputPath)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create zip file: %w", err)
+// 	}
+// 	defer zipFile.Close()
+
+// 	log.Entry().Infof("Created zip file: %s", outputPath)
+
+// 	// Create a new zip writer
+// 	zipWriter := zip.NewWriter(zipFile)
+// 	defer zipWriter.Close()
+
+// 	// Track file count
+// 	fileCount := 0
+
+// 	// Walk through all the files in the folder
+// 	err = filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+// 		if err != nil {
+// 			log.Entry().Errorf("Error accessing path %s: %v", path, err)
+// 			return err
+// 		}
+
+// 		// Log each file being processed
+// 		log.Entry().Infof("Zipping file or directory: %s", path)
+
+// 		// Create a header based on the file info
+// 		header, err := zip.FileInfoHeader(info)
+// 		if err != nil {
+// 			log.Entry().Errorf("Failed to create zip header for file: %s", path)
+// 			return err
+// 		}
+
+// 		// Ensure the correct relative file path in the zip
+// 		header.Name, err = filepath.Rel(filepath.Dir(folderPath), path)
+// 		if err != nil {
+// 			log.Entry().Errorf("Failed to create relative path for file: %s", path)
+// 			return err
+// 		}
+
+// 		if info.IsDir() {
+// 			header.Name += "/"
+// 		} else {
+// 			header.Method = zip.Deflate
+// 		}
+
+// 		// Create the writer for this file
+// 		writer, err := zipWriter.CreateHeader(header)
+// 		if err != nil {
+// 			log.Entry().Errorf("Failed to write header for file: %s", path)
+// 			return err
+// 		}
+
+// 		// If it's a file, copy the content into the zip
+// 		if !info.IsDir() {
+// 			file, err := os.Open(path)
+// 			if err != nil {
+// 				log.Entry().Errorf("Failed to open file: %s", path)
+// 				return err
+// 			}
+// 			defer file.Close()
+
+// 			_, err = io.Copy(writer, file)
+// 			if err != nil {
+// 				log.Entry().Errorf("Failed to copy file content to zip for file: %s", path)
+// 				return err
+// 			}
+// 		}
+
+// 		fileCount++
+// 		return nil
+// 	})
+
+// 	if err != nil {
+// 		return fmt.Errorf("failed to zip folder: %w", err)
+// 	}
+
+// 	log.Entry().Infof("Successfully zipped %d files", fileCount)
+
+// 	return nil
+// }
 
 func newOnapsisExecuteScanUtils() onapsisExecuteScanUtils {
 	utils := onapsisExecuteScanUtilsBundle{
