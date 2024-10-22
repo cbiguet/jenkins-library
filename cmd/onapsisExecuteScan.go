@@ -331,6 +331,8 @@ func onapsisExecuteScan(config onapsisExecuteScanOptions, telemetryData *telemet
 	// It can also be used for example as a mavenExecRunner.
 	utils := newOnapsisExecuteScanUtils()
 
+	log.SetVerbose(true)
+
 	// For HTTP calls import  piperhttp "github.com/SAP/jenkins-library/pkg/http"
 	// and use a  &piperhttp.Client{} in a custom system
 	// Example: step checkmarxExecuteScan.go
@@ -386,6 +388,8 @@ type ScanServer struct {
 
 func NewScanServer(client piperHttp.Uploader, serverUrl string, token string) (*ScanServer, error) {
 	server := &ScanServer{serverUrl: serverUrl, client: client}
+
+	log.Entry().Debugf("Token: %s", token)
 
 	// Set authorization token for client
 	options := piperHttp.ClientOptions{
