@@ -17,8 +17,12 @@ import (
 )
 
 type onapsisExecuteScanOptions struct {
-	ScanServiceURL string `json:"scanServiceUrl,omitempty"`
-	AccessToken    string `json:"accessToken,omitempty"`
+	ScanServiceURL         string `json:"scanServiceUrl,omitempty"`
+	AccessToken            string `json:"accessToken,omitempty"`
+	AppType                string `json:"appType,omitempty" validate:"possible-values=abap ui5"`
+	FailOnMandatoryFinding bool   `json:"failOnMandatoryFinding,omitempty"`
+	FailOnOptionalFinding  bool   `json:"failOnOptionalFinding,omitempty"`
+	DebugMode              bool   `json:"debugMode,omitempty"`
 }
 
 // OnapsisExecuteScanCommand Execute a scan with Onapsis Control
@@ -141,6 +145,10 @@ func OnapsisExecuteScanCommand() *cobra.Command {
 func addOnapsisExecuteScanFlags(cmd *cobra.Command, stepConfig *onapsisExecuteScanOptions) {
 	cmd.Flags().StringVar(&stepConfig.ScanServiceURL, "scanServiceUrl", os.Getenv("PIPER_scanServiceUrl"), "URL of the scan service")
 	cmd.Flags().StringVar(&stepConfig.AccessToken, "accessToken", os.Getenv("PIPER_accessToken"), "Token used to authenticate with the Control Scan Service")
+	cmd.Flags().StringVar(&stepConfig.AppType, "appType", `ui5`, "Type of the application to be scanned")
+	cmd.Flags().BoolVar(&stepConfig.FailOnMandatoryFinding, "failOnMandatoryFinding", true, "Fail the build if mandatory findings are detected")
+	cmd.Flags().BoolVar(&stepConfig.FailOnOptionalFinding, "failOnOptionalFinding", false, "Fail the build if optional findings are detected")
+	cmd.Flags().BoolVar(&stepConfig.DebugMode, "debugMode", false, "Enable debug mode for the scan")
 
 	cmd.MarkFlagRequired("scanServiceUrl")
 }
@@ -181,6 +189,42 @@ func onapsisExecuteScanMetadata() config.StepData {
 						Mandatory: false,
 						Aliases:   []config.Alias{},
 						Default:   os.Getenv("PIPER_accessToken"),
+					},
+					{
+						Name:        "appType",
+						ResourceRef: []config.ResourceReference{},
+						Scope:       []string{"PARAMETERS", "STAGES", "STEPS"},
+						Type:        "string",
+						Mandatory:   false,
+						Aliases:     []config.Alias{},
+						Default:     `ui5`,
+					},
+					{
+						Name:        "failOnMandatoryFinding",
+						ResourceRef: []config.ResourceReference{},
+						Scope:       []string{"PARAMETERS", "STAGES", "STEPS"},
+						Type:        "bool",
+						Mandatory:   false,
+						Aliases:     []config.Alias{},
+						Default:     true,
+					},
+					{
+						Name:        "failOnOptionalFinding",
+						ResourceRef: []config.ResourceReference{},
+						Scope:       []string{"PARAMETERS", "STAGES", "STEPS"},
+						Type:        "bool",
+						Mandatory:   false,
+						Aliases:     []config.Alias{},
+						Default:     false,
+					},
+					{
+						Name:        "debugMode",
+						ResourceRef: []config.ResourceReference{},
+						Scope:       []string{"PARAMETERS", "STAGES", "STEPS"},
+						Type:        "bool",
+						Mandatory:   false,
+						Aliases:     []config.Alias{},
+						Default:     false,
 					},
 				},
 			},

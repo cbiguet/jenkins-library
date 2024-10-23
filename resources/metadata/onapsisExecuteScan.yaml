@@ -29,3 +29,38 @@ spec:
         resourceRef:
           - name: onapsisTokenCredentialsId
             type: secret
+      - name: appType
+        type: string
+        description: "Type of the application to be scanned"
+        default: "ui5"
+        scope:
+          - PARAMETERS
+          - STAGES
+          - STEPS
+        possibleValues:
+          - "abap"
+          - "ui5"
+      - name: failOnMandatoryFinding
+        type: bool
+        description: "Fail the build if mandatory findings are detected"
+        default: true
+        scope:
+          - PARAMETERS
+          - STAGES
+          - STEPS
+      - name: failOnOptionalFinding
+        type: bool
+        description: "Fail the build if optional findings are detected"
+        default: false
+        scope:
+          - PARAMETERS
+          - STAGES
+          - STEPS
+      - name: debugMode
+        type: bool
+        description: "Enable debug mode for the scan"
+        default: false
+        scope:
+          - PARAMETERS
+          - STAGES
+          - STEPS

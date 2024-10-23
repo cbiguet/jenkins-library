@@ -182,7 +182,9 @@ func onapsisExecuteScan(config onapsisExecuteScanOptions, telemetryData *telemet
 	// It can also be used for example as a mavenExecRunner.
 	utils := newOnapsisExecuteScanUtils()
 
-	log.SetVerbose(true)
+	if config.DebugMode {
+		log.SetVerbose(true)
+	}
 
 	// For HTTP calls import  piperhttp "github.com/SAP/jenkins-library/pkg/http"
 	// and use a  &piperhttp.Client{} in a custom system
@@ -206,7 +208,7 @@ func runOnapsisExecuteScan(config *onapsisExecuteScanOptions, telemetryData *tel
 
 	// Call the ScanProject method
 	log.Entry().Info("Scanning project...")
-	response, err := server.ScanProject(config, telemetryData, utils, "ui5")
+	response, err := server.ScanProject(config, telemetryData, utils, config.AppType)
 	if err != nil {
 		return errors.Wrap(err, "Failed to scan project")
 	}
@@ -228,10 +230,13 @@ func runOnapsisExecuteScan(config *onapsisExecuteScanOptions, telemetryData *tel
 
 	// Analyze metrics
 	loc, numMandatory, numOptional := extractMetrics(metrics)
+	// To-Do: Change logging to print lines of code scanned in what amount of time
 	log.Entry().Infof("Job Metrics - Lines of Code Scanned: %s, Mandatory Findings: %s, Optional Findings: %s", loc, numMandatory, numOptional)
-	// Return error if mandatory findings are found
-	if numMandatory != "0" {
-		return errors.Errorf("Mandatory findings found: %s", numMandatory)
+
+	if config.FailOnMandatoryFinding && numMandatory != "0" {
+		return errors.Errorf("Scan failed with %s mandatory findings", numMandatory)
+	} else if config.FailOnOptionalFinding && numOptional != "0" {
+		return errors.Errorf("Scan failed with %s optional findings", numOptional)
 	}
 
 	return nil
