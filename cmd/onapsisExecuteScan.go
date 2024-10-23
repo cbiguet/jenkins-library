@@ -458,6 +458,7 @@ func handleResponse(response *http.Response, responseData interface{}) error {
 	default:
 		return errors.New("Unknown response type")
 	}
+}
 
 // type Response struct {
 // 	Success bool             `json:"success"`
