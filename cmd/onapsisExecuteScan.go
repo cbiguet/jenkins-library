@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -207,10 +208,31 @@ func runOnapsisExecuteScan(config *onapsisExecuteScanOptions, telemetryData *tel
 	log.Entry().Info("Scanning project...")
 	response, err := server.ScanProject(config, telemetryData, utils, "ui5")
 	if err != nil {
-		return errors.Wrap(err, "failed to scan project")
+		return errors.Wrap(err, "Failed to scan project")
 	}
-	// Log the JobID
-	log.Entry().Infof("JobID: %s", response.Result.JobID)
+
+	// Monitor Job Status
+	jobID := response.Result.JobID
+	log.Entry().Infof("Monitoring job %s status...", jobID)
+	server.MonitorJobStatus(jobID)
+	if err != nil {
+		return errors.Wrap(err, "Failed to scan project")
+	}
+
+	// Get Job Result Metrics
+	log.Entry().Info("Getting job result metrics...")
+	metrics, err := server.GetJobResultMetrics(jobID)
+	if err != nil {
+		return errors.Wrap(err, "Failed to get job result metrics")
+	}
+
+	// Analyze metrics
+	loc, numMandatory, numOptional := extractMetrics(metrics)
+	log.Entry().Infof("Job Metrics - Lines of Code Scanned: %s, Mandatory Findings: %s, Optional Findings: %s", loc, numMandatory, numOptional)
+	// Return error if mandatory findings are found
+	if numMandatory != "0" {
+		return errors.Errorf("Mandatory findings found: %s", numMandatory)
+	}
 
 	return nil
 }
@@ -238,12 +260,12 @@ func NewScanServer(client piperHttp.Uploader, serverUrl string, token string) (*
 	return server, nil
 }
 
-func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryData *telemetry.CustomData, utils onapsisExecuteScanUtils, language string) (Response, error) {
+func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryData *telemetry.CustomData, utils onapsisExecuteScanUtils, language string) (ScanProjectResponse, error) {
 	// Get workspace path
 	log.Entry().Info("Getting workspace path...") // DEBUG
 	workspace, err := utils.Getwd()
 	if err != nil {
-		return Response{}, errors.Wrap(err, "failed to get workspace path")
+		return ScanProjectResponse{}, errors.Wrap(err, "failed to get workspace path")
 	}
 
 	// Zip workspace files
@@ -252,14 +274,14 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	zipFilePath := filepath.Join(workspace, zipFileName)
 	err = zipProject(workspace, zipFilePath)
 	if err != nil {
-		return Response{}, errors.Wrap(err, "failed to zip workspace files")
+		return ScanProjectResponse{}, errors.Wrap(err, "failed to zip workspace files")
 	}
 
 	// Get zip file content
 	log.Entry().Info("Getting zip file content...") // DEBUG
 	fileHandle, err := utils.Open(zipFilePath)
 	if err != nil {
-		return Response{}, errors.Wrapf(err, "unable to locate file %v", zipFilePath)
+		return ScanProjectResponse{}, errors.Wrapf(err, "unable to locate file %v", zipFilePath)
 	}
 	defer fileHandle.Close()
 
@@ -300,59 +322,152 @@ func (srv *ScanServer) ScanProject(config *onapsisExecuteScanOptions, telemetryD
 	log.Entry().Info("Sending request...") // DEBUG
 	response, err := srv.client.Upload(requestData)
 	if err != nil {
-		return Response{}, errors.Wrap(err, "failed to upload file")
+		return ScanProjectResponse{}, errors.Wrap(err, "Failed to start scan")
 	}
 
-	// Parse response
-	log.Entry().Info("Parsing response...") // DEBUG
-	responseData := Response{}
-	err = piperHttp.ParseHTTPResponseBodyJSON(response, &responseData)
+	// Handle response
+	var responseData ScanProjectResponse
+	err = handleResponse(response, &responseData)
 	if err != nil {
-		return Response{}, errors.Wrap(err, "failed to parse file")
-	}
-
-	// Check the success field
-	log.Entry().Info("Checking success field...") // DEBUG
-	if responseData.Success {
-		return responseData, nil
-	} else {
-		messageJSON, err := json.MarshalIndent(responseData.Result.Messages, "", "  ")
-		if err != nil {
-			return Response{}, errors.Wrap(err, "failed to marshal Messages")
-		}
-		return responseData, errors.Errorf("Request failed with result_code: %d, messages: %v", responseData.Result.ResultCode, string(messageJSON))
-	}
-
-}
-
-func (srv *ScanServer) GetScanJobStatus(jobID string) (Response, error) {
-	// Send request
-	response, err := srv.client.SendRequest("GET", srv.serverUrl+"/cca/v1.2/job/"+jobID, nil, nil, nil)
-	if err != nil {
-		return Response{}, errors.Wrap(err, "failed to send request")
-	}
-
-	// Parse response
-	responseData := Response{}
-	err = piperHttp.ParseHTTPResponseBodyJSON(response, &responseData)
-	if err != nil {
-		return Response{}, errors.Wrap(err, "failed to parse response")
+		return responseData, errors.Wrap(err, "Failed to parse response")
 	}
 
 	return responseData, nil
 }
 
-type Response struct {
-	Success bool             `json:"success"`
-	Result  OnapsisJobResult `json:"result"`
+func (srv *ScanServer) GetScanJobStatus(jobID string) (GetScanJobStatusResponse, error) {
+	// Send request
+	response, err := srv.client.SendRequest("GET", srv.serverUrl+"/cca/v1.2/job/"+jobID, nil, nil, nil)
+	if err != nil {
+		return GetScanJobStatusResponse{}, errors.Wrap(err, "failed to send request")
+	}
+
+	var responseData GetScanJobStatusResponse
+	err = handleResponse(response, &responseData)
+	if err != nil {
+		return responseData, errors.Wrap(err, "Failed to parse response")
+	}
+
+	return responseData, nil
 }
 
-type OnapsisJobResult struct {
-	JobID      string    `json:"job_id"`      // present only on success
-	ResultCode int       `json:"result_code"` // present only on failure
-	Timestamp  string    `json:"timestamp"`   // present only on success
-	Messages   []Message `json:"messages"`
+func (srv *ScanServer) MonitorJobStatus(jobID string) error {
+	// Polling interval
+	interval := time.Second * 10 // Check every 10 seconds
+	for {
+		// Get the job status
+		response, err := srv.GetScanJobStatus(jobID)
+		if err != nil {
+			return errors.Wrap(err, "failed to get scan job status")
+		}
+
+		// Log job progress
+		log.Entry().Infof("Job %s progress: %d%%", jobID, response.Result.Progress)
+
+		// Check if the job is complete
+		if response.Result.Status == "SUCCESS" {
+			return nil
+		} else if response.Result.Status == "FAILURE" {
+			return errors.Errorf("Job %s failed with status: %s", jobID, response.Result.Status)
+		}
+
+		// Wait before checking again
+		time.Sleep(interval)
+	}
 }
+
+func (srv *ScanServer) GetJobResultMetrics(jobID string) (GetJobResultMetricsResponse, error) {
+	// Send request
+	response, err := srv.client.SendRequest("GET", srv.serverUrl+"/cca/v1.2/job/"+jobID+"/result?type=metrics", nil, nil, nil)
+	if err != nil {
+		return GetJobResultMetricsResponse{}, errors.Wrap(err, "failed to send request")
+	}
+
+	var responseData GetJobResultMetricsResponse
+	err = handleResponse(response, &responseData)
+	if err != nil {
+		return responseData, errors.Wrap(err, "Failed to parse response")
+	}
+
+	return responseData, nil
+}
+
+func extractMetrics(response GetJobResultMetricsResponse) (loc, numMandatory, numOptional string) {
+	for _, metric := range response.Result.Metrics {
+		switch metric.Name {
+		case "LOC":
+			loc = metric.Value
+		case "num_mandatory":
+			numMandatory = metric.Value
+		case "num_optional":
+			numOptional = metric.Value
+		}
+	}
+
+	return loc, numMandatory, numOptional
+}
+
+// func handleResponse(response *http.Response, result interface{}) (Response, error) {
+// 	responseData := Response{}
+// 	err := piperHttp.ParseHTTPResponseBodyJSON(response, &responseData)
+// 	if err != nil {
+// 		return Response{}, errors.Wrap(err, "failed to parse file")
+// 	}
+
+// 	// Check the success field
+// 	if responseData.Success {
+// 		return responseData, nil
+// 	} else {
+// 		messageJSON, err := json.MarshalIndent(responseData.Result.Messages, "", "  ")
+// 		if err != nil {
+// 			return Response{}, errors.Wrap(err, "Failed to marshal Messages")
+// 		}
+// 		return responseData, errors.Errorf("Request failed with result_code: %d, messages: %v", responseData.Result.ResultCode, string(messageJSON))
+// 	}
+// }
+
+func handleResponse(response *http.Response, responseData interface{}) error {
+	err := piperHttp.ParseHTTPResponseBodyJSON(response, &responseData)
+	if err != nil {
+		return errors.Wrap(err, "Failed to parse file")
+	}
+
+	// Define a helper function to check success and handle error messages
+	checkResponse := func(success bool, messages interface{}, resultCode int) error {
+		if success {
+			return nil
+		}
+		messageJSON, err := json.MarshalIndent(messages, "", "  ")
+		if err != nil {
+			return errors.Wrap(err, "Failed to marshal Messages")
+		}
+		return errors.Errorf("Request failed with result_code: %d, messages: %v", resultCode, string(messageJSON))
+	}
+
+	// Use type switch to handle different response types
+	switch data := responseData.(type) {
+	case ScanProjectResponse:
+		return checkResponse(data.Success, data.Result.Messages, data.Result.ResultCode)
+	case GetScanJobStatusResponse:
+		return checkResponse(data.Success, data.Result.Messages, 0)
+	case GetJobResultMetricsResponse:
+		return checkResponse(data.Success, data.Result.Metrics, 0)
+	default:
+		return errors.New("Unknown response type")
+	}
+}
+
+// type Response struct {
+// 	Success bool             `json:"success"`
+// 	Result  OnapsisJobResult `json:"result"`
+// }
+
+// type OnapsisJobResult struct {
+// 	JobID      string    `json:"job_id"`      // present only on success
+// 	ResultCode int       `json:"result_code"` // present only on failure
+// 	Timestamp  string    `json:"timestamp"`   // present only on success
+// 	Messages   []Message `json:"messages"`
+// }
 
 type Message struct {
 	Sequence  int    `json:"sequence"`
@@ -363,4 +478,38 @@ type Message struct {
 	Param2    string `json:"param2"`
 	Param3    string `json:"param3"`
 	Param4    string `json:"param4"`
+}
+
+type ScanProjectResponse struct {
+	Success bool `json:"success"`
+	Result  struct {
+		JobID      string    `json:"job_id"`      // present only on success
+		ResultCode int       `json:"result_code"` // present only on failure
+		Timestamp  string    `json:"timestamp"`   // present only on success
+		Messages   []Message `json:"messages"`
+	} `json:"result"`
+}
+
+type GetScanJobStatusResponse struct {
+	Success bool `json:"success"`
+	Result  struct {
+		JobID         string    `json:"job_id"`
+		ReqRecvTime   string    `json:"req_recv_time"`
+		ScanStartTime string    `json:"scan_start_time"`
+		ScanEndTime   string    `json:"scan_end_time"`
+		EngineType    string    `json:"engine_type"`
+		Status        string    `json:"status"`
+		Progress      int       `json:"progress"`
+		Messages      []Message `json:"messages"`
+	} `json:"result"`
+}
+
+type GetJobResultMetricsResponse struct {
+	Success bool `json:"success"`
+	Result  struct {
+		Metrics []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		} `json:"metrics"`
+	} `json:"result"`
 }
