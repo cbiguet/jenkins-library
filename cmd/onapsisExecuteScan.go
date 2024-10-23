@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/SAP/jenkins-library/pkg/command"
@@ -445,6 +446,8 @@ func handleResponse(response *http.Response, responseData interface{}) error {
 	}
 
 	// Use type switch to handle different response types
+	log.Entry().Debugf("responseData type: %T", responseData)                               // Log type using %T
+	log.Entry().Debugf("responseData type using reflect: %v", reflect.TypeOf(responseData)) // Log type using reflect.TypeOf
 	switch data := responseData.(type) {
 	case ScanProjectResponse:
 		return checkResponse(data.Success, data.Result.Messages, data.Result.ResultCode)
@@ -455,7 +458,6 @@ func handleResponse(response *http.Response, responseData interface{}) error {
 	default:
 		return errors.New("Unknown response type")
 	}
-}
 
 // type Response struct {
 // 	Success bool             `json:"success"`
