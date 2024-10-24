@@ -38,11 +38,13 @@ jobs:
         docker rm piper
 
     # Get the current version tag from the repository
-    - name: Get Version Tag
+    - name: Get Latest Tag across all branches
       id: get_tag
       run: |
-        TAG=$(git describe --tags --abbrev=0)
-        echo "::set-output name=TAG::$TAG"
+        git fetch --tags   # Fetch all tags from the repository
+        TAG=$(git tag --sort=-v:refname | head -n 1)  # Get the latest tag
+        echo "Latest tag: $TAG"
+        echo "::set-output name=TAG::$TAG"  # Set the output variable
 
     # Create a new tag (e.g., increase patch version)
     - name: Create New Tag

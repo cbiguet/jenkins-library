@@ -4,8 +4,15 @@ import static com.sap.piper.Prerequisites.checkScript
 @Field String STEP_NAME = getClass().getName()
 @Field String METADATA_FILE = 'metadata/onapsisExecuteScan.yaml'
 
-def call(Map parameters = [:], body) {
-    final script = checkScript(this, parameters) ?: this
+def call(Map parameters = [:]) {
     List credentials = [[type: 'token', id: 'onapsisTokenCredentialsId', env: ['PIPER_accessToken']]]
-    piperExecuteBin(parameters, STEP_NAME, METADATA_FILE, credentials)
+    try {
+        piperExecuteBin(parameters, STEP_NAME, METADATA_FILE, credentials)
+    } catch (Exception e) {
+        error("An error occurred while executing the Onapsis scan: ${e.message}")
+        currentBuild.result = 'FAILURE' // Mark the build as failed
+        throw e // Stop execution and fail the build immediately
+    } finally {
+        archiveArtifacts('onapsis_scan_report.zip')
+    }
 }
