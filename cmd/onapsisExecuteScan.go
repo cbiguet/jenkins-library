@@ -54,16 +54,18 @@ func newOnapsisExecuteScanUtils() onapsisExecuteScanUtils {
 }
 
 var includePatterns = []string{
+	// TODO: Add more include patterns as needed (e.g., for ABAP scans)
 	"**/*.js",
 	"**/*.json",
 }
 
 var excludePatterns = []string{
-	"**/.git/**",      // Exclude .git directory
-	"**/.pipeline/**", // Exclude .pipeline directory
-	"**/.gitignore",   // Exclude .gitignore file
-	"**/*.log",        // Exclude all log files
-	"workspace.zip",   // Exclude the zip file itself
+	"**/.git/**",         // Exclude .git directory
+	"**/.pipeline/**",    // Exclude .pipeline directory
+	"**/node_modules/**", // Exclude node_modules directory
+	"**/.gitignore",      // Exclude .gitignore file
+	"**/*.log",           // Exclude all log files
+	"workspace.zip",      // Exclude the zip file itself
 }
 
 func zipProject(folderPath string, outputPath string) error {
@@ -186,10 +188,6 @@ func onapsisExecuteScan(config onapsisExecuteScanOptions, telemetryData *telemet
 		log.SetVerbose(true)
 	}
 
-	// For HTTP calls import  piperhttp "github.com/SAP/jenkins-library/pkg/http"
-	// and use a  &piperhttp.Client{} in a custom system
-	// Example: step checkmarxExecuteScan.go
-
 	// Error situations should be bubbled up until they reach the line below which will then stop execution
 	// through the log.Entry().Fatal() call leading to an os.Exit(1) in the end.
 	err := runOnapsisExecuteScan(&config, telemetryData, utils)
@@ -216,9 +214,16 @@ func runOnapsisExecuteScan(config *onapsisExecuteScanOptions, telemetryData *tel
 	// Monitor Job Status
 	jobID := response.Result.JobID
 	log.Entry().Infof("Monitoring job %s status...", jobID)
-	server.MonitorJobStatus(jobID)
+	err = server.MonitorJobStatus(jobID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to scan project")
+	}
+
+	// Get Job Reports
+	log.Entry().Info("Getting job reports...")
+	err = server.GetJobReports(jobID, "onapsis_scan_report.zip")
+	if err != nil {
+		return errors.Wrap(err, "Failed to get job reports")
 	}
 
 	// Get Job Result Metrics
@@ -230,7 +235,7 @@ func runOnapsisExecuteScan(config *onapsisExecuteScanOptions, telemetryData *tel
 
 	// Analyze metrics
 	loc, numMandatory, numOptional := extractMetrics(metrics)
-	// To-Do: Change logging to print lines of code scanned in what amount of time
+	// TODO: Change logging to print lines of code scanned in what amount of time
 	log.Entry().Infof("Job Metrics - Lines of Code Scanned: %s, Mandatory Findings: %s, Optional Findings: %s", loc, numMandatory, numOptional)
 
 	if config.FailOnMandatoryFinding && numMandatory != "0" {
@@ -363,7 +368,7 @@ func (srv *ScanServer) MonitorJobStatus(jobID string) error {
 		// Get the job status
 		response, err := srv.GetScanJobStatus(jobID)
 		if err != nil {
-			return errors.Wrap(err, "failed to get scan job status")
+			return errors.Wrap(err, "Failed to get scan job status")
 		}
 
 		// Log job progress
@@ -412,24 +417,27 @@ func extractMetrics(response GetJobResultMetricsResponse) (loc, numMandatory, nu
 	return loc, numMandatory, numOptional
 }
 
-// func handleResponse(response *http.Response, result interface{}) (Response, error) {
-// 	responseData := Response{}
-// 	err := piperHttp.ParseHTTPResponseBodyJSON(response, &responseData)
-// 	if err != nil {
-// 		return Response{}, errors.Wrap(err, "failed to parse file")
-// 	}
+func (srv *ScanServer) GetJobReports(jobID string, reportArchiveName string) error {
+	response, err := srv.client.SendRequest("GET", srv.serverUrl+"/cca/v1.2/job/"+jobID+"/result?fileType=all", nil, nil, nil)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve job report")
+	}
 
-// 	// Check the success field
-// 	if responseData.Success {
-// 		return responseData, nil
-// 	} else {
-// 		messageJSON, err := json.MarshalIndent(responseData.Result.Messages, "", "  ")
-// 		if err != nil {
-// 			return Response{}, errors.Wrap(err, "Failed to marshal Messages")
-// 		}
-// 		return responseData, errors.Errorf("Request failed with result_code: %d, messages: %v", responseData.Result.ResultCode, string(messageJSON))
-// 	}
-// }
+	// Create the destination zip file
+	outFile, err := os.Create(reportArchiveName)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create report archive")
+	}
+	defer outFile.Close()
+
+	// Copy the response body to the file
+	_, err = io.Copy(outFile, response.Body)
+	if err != nil {
+		return errors.Wrap(err, "Failed to write report archive")
+	}
+
+	return nil
+}
 
 func handleResponse(response *http.Response, responseData interface{}) error {
 	err := piperHttp.ParseHTTPResponseBodyJSON(response, &responseData)
@@ -462,18 +470,6 @@ func handleResponse(response *http.Response, responseData interface{}) error {
 		return errors.New("Unknown response type")
 	}
 }
-
-// type Response struct {
-// 	Success bool             `json:"success"`
-// 	Result  OnapsisJobResult `json:"result"`
-// }
-
-// type OnapsisJobResult struct {
-// 	JobID      string    `json:"job_id"`      // present only on success
-// 	ResultCode int       `json:"result_code"` // present only on failure
-// 	Timestamp  string    `json:"timestamp"`   // present only on success
-// 	Messages   []Message `json:"messages"`
-// }
 
 type Message struct {
 	Sequence  int    `json:"sequence"`
